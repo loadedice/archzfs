@@ -56,11 +56,28 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Cache Pacman packages
+        uses: actions/cache@v4
+        with:
+          path: .pacman-cache
+          key: pacman-pkg
+          restore-keys: |
+            pacman-pkg
+          
       - name: Run builder container
         env:
           GPG_KEY_DATA: "${{ secrets.GPG_KEY_DATA }}"
           GPG_KEY_ID: "${{ vars.GPG_KEY_ID }}"
-        run: docker run -e GPG_KEY_DATA -e GPG_KEY_ID -e FAILOVER_RELEASE_NAME --privileged --rm -v "$(pwd):/src" archzfs-builder
+        run: |
+          docker run \
+            -e GPG_KEY_DATA \
+            -e GPG_KEY_ID \
+            -e FAILOVER_RELEASE_NAME \
+            --privileged \
+            --rm \
+            -v "$(pwd):/src" \
+            -v "$(pwd)/.pacman-cache:/var/cache/pacman/pkg"
+            archzfs-builder
 
       - name: Delete possible leftover temporary release
         env:
