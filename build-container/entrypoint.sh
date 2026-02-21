@@ -110,6 +110,7 @@ build_if_required() {
     if [ "${flag}" != "false" ]; then
         build "${mode}" || failover "${mode}"
     else
+        echo "Skipping $mode, build not required"
         failover "${mode}"
     fi
 }
