@@ -60,12 +60,17 @@ build() {
 }
 
 failover() {
+    local failed_pkg
+    local mode="$1"
+    case "$mode" in
+        std)      failed_pkg="zfs-linux" ;;
+        *)        failed_pkg="zfs-linux-${mode}" ;;
+    esac
+
     if [ -z "${FAILOVER_REPO_DIR}" ]; then
-        echo "No failover repo available, failing because of: $1"
+        echo "No failover repo available, failing because of: $failed_pkg"
         exit 1
     fi
-
-    failed_pkg="$1"
 
     set +x # This gets way to verbose
     for desc in "${FAILOVER_REPO_DIR}"/*/desc; do
@@ -99,14 +104,13 @@ failover() {
     set -x
 }
 
-build_or_failover() {
+build_if_required() {
     local mode="$1"
-    local pkg="$2"
-    local flag="$3"
+    local flag="$2"
     if [ "${flag}" != "false" ]; then
-        build "${mode}" || failover "${pkg}"
+        build "${mode}" || failover "${mode}"
     else
-        failover "${pkg}"
+        failover "${mode}"
     fi
 }
 
@@ -115,10 +119,10 @@ build utils
 build dkms
 
 # These are kernel dependant, so they might fail
-build_or_failover lts      zfs-linux-lts      "${BUILD_LINUX_LTS}"
-build_or_failover std      zfs-linux          "${BUILD_LINUX}"
-build_or_failover hardened zfs-linux-hardened "${BUILD_LINUX_HARDENED}"
-build_or_failover zen      zfs-linux-zen      "${BUILD_LINUX_ZEN}"
+build_if_required lts      "${BUILD_LINUX_LTS}"
+build_if_required std      "${BUILD_LINUX}"
+build_if_required hardened "${BUILD_LINUX_HARDENED}"
+build_if_required zen      "${BUILD_LINUX_ZEN}"
 
 # Not implemented, yet, as documented in archzfs-ci
 # sudo bash test.sh ...
