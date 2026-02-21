@@ -72,7 +72,8 @@ jobs:
           BUILD_LINUX_LTS: "${{ inputs.build_linux_lts }}"
           BUILD_LINUX_HARDENED: "${{ inputs.build_linux_hardened }}"
           BUILD_LINUX_ZEN: "${{ inputs.build_linux_zen }}"
-        run: docker run \
+        run: |
+          docker run \
           -e GPG_KEY_DATA -e GPG_KEY_ID \
           -e FAILOVER_RELEASE_NAME \
           -e BUILD_LINUX -e BUILD_LINUX_LTS -e BUILD_LINUX_HARDENED -e BUILD_LINUX_ZEN \
