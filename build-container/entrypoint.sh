@@ -99,15 +99,26 @@ failover() {
     set -x
 }
 
+build_or_failover() {
+    local mode="$1"
+    local pkg="$2"
+    local flag="$3"
+    if [ "${flag}" != "false" ]; then
+        build "${mode}" || failover "${pkg}"
+    else
+        failover "${pkg}"
+    fi
+}
+
 # These packages must always build
 build utils
 build dkms
 
 # These are kernel dependant, so they might fail
-build lts || failover zfs-linux-lts
-build std || failover zfs-linux
-build hardened || failover zfs-linux-hardened
-build zen || failover zfs-linux-zen
+build_or_failover lts      zfs-linux-lts      "${BUILD_LINUX_LTS}"
+build_or_failover std      zfs-linux          "${BUILD_LINUX}"
+build_or_failover hardened zfs-linux-hardened "${BUILD_LINUX_HARDENED}"
+build_or_failover zen      zfs-linux-zen      "${BUILD_LINUX_ZEN}"
 
 # Not implemented, yet, as documented in archzfs-ci
 # sudo bash test.sh ...
