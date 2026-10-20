@@ -7,7 +7,7 @@ set -euo pipefail
 kernel=${1:?kernel package}
 mirror=${2:?mirror URL}
 case "$kernel" in linux|linux-lts) ;; *) exit 1 ;; esac
-cd /tmp/runtime-candidate
+cd /var/tmp/archzfs-ci/runtime-candidate
 sha256sum --check SHA256SUMS
 mkdir -p /var/tmp/archzfs-results
 cp metadata/build.txt /var/tmp/archzfs-results/
@@ -30,7 +30,7 @@ cat >> /etc/pacman.conf <<'EOF'
 
 [candidate]
 SigLevel = Optional
-Server = file:///tmp/runtime-candidate/packages
+Server = file:///var/tmp/archzfs-ci/runtime-candidate/packages
 EOF
 pacman -Sy --noconfirm
 pacman -S --noconfirm candidate/zfs-utils candidate/zfs-tests "candidate/zfs-$kernel"

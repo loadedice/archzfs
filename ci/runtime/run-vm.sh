@@ -84,6 +84,12 @@ printf 'instance-id: archzfs-%s\nlocal-hostname: archzfs-ci\n' "$GITHUB_RUN_ID" 
 cloud-localds "$work/seed.iso" "$work/user-data" "$work/meta-data"
 
 start_vm() {
+    # Runner device permissions can be reset after the previous QEMU exits.
+    # Record the state and grant this runner access immediately before each boot.
+    getfacl /dev/kvm > "$results/kvm-$1-before.acl"
+    sudo setfacl -m "u:$(id -un):rw" /dev/kvm
+    getfacl /dev/kvm > "$results/kvm-$1-after.acl"
+    test -r /dev/kvm && test -w /dev/kvm
     qemu-system-x86_64 -machine q35,accel=kvm -cpu host -m 4096 -smp 2 \
         -display none -monitor none -serial "file:$results/serial-$1.log" \
         -drive "file=$work/os.qcow2,if=none,id=os,format=qcow2" \
@@ -109,9 +115,10 @@ start_vm() {
 boot_args=()
 start_vm prepare
 guest sudo cloud-init status --wait
-scp "${scp_options[@]}" -r runtime-candidate ci@127.0.0.1:/tmp/
-scp "${scp_options[@]}" ci/runtime/guest-{prepare,test}.sh ci@127.0.0.1:/tmp/
-guest "sudo bash /tmp/guest-prepare.sh '$KERNEL_PACKAGE' '$MIRROR_URL'"
+guest sudo install -d -o ci -g ci /var/tmp/archzfs-ci
+scp "${scp_options[@]}" -r runtime-candidate ci@127.0.0.1:/var/tmp/archzfs-ci/
+scp "${scp_options[@]}" ci/runtime/guest-{prepare,test}.sh ci@127.0.0.1:/var/tmp/archzfs-ci/
+guest "sudo bash /var/tmp/archzfs-ci/guest-prepare.sh '$KERNEL_PACKAGE' '$MIRROR_URL'"
 scp "${scp_options[@]}" ci@127.0.0.1:/tmp/archzfs-vmlinuz "$work/vmlinuz"
 scp "${scp_options[@]}" ci@127.0.0.1:/tmp/archzfs-initramfs.img "$work/initramfs.img"
 root_uuid=$(guest cat /var/tmp/archzfs-results/root-uuid)
@@ -129,6 +136,6 @@ stop_vm
 boot_args=(-kernel "$work/vmlinuz" -initrd "$work/initramfs.img"
     -append "root=UUID=$root_uuid rw console=ttyS0")
 start_vm candidate
-guest "sudo bash /tmp/guest-test.sh '${RUN_ZTS:-false}'"
+guest "sudo bash /var/tmp/archzfs-ci/guest-test.sh '${RUN_ZTS:-false}'"
 printf 'PASS: %s package smoke tests; ZTS requested: %s\n' "$KERNEL_PACKAGE" "${RUN_ZTS:-false}" \
     | tee "$results/result.txt" >> "$GITHUB_STEP_SUMMARY"
