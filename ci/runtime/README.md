@@ -13,6 +13,11 @@ The scripts reject execution outside GitHub-hosted runners; do not run them
 locally. The VM and privileged build run remotely, including all scratch disk
 and pool operations.
 
+Enable Actions on the fork before pushing this branch. If it was first pushed
+while fork workflows were disabled, push another change under `ci/runtime/` to
+start the branch workflow. GitHub's manual dispatch UI requires the workflow
+file to exist on the default branch; until then, branch pushes run smoke tests.
+
 ## What it exercises
 
 Each matrix job targets `linux` or `linux-lts`:
