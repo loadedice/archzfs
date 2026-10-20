@@ -1,0 +1,78 @@
+name: Arch VM runtime spike
+
+on:
+  push:
+    branches: [spike/arch-vm-runtime-tests]
+    paths:
+      - '.github/workflows/arch-vm-spike.yml'
+      - 'ci/runtime/**'
+  workflow_dispatch:
+    inputs:
+      zts:
+        description: Run the packaged upstream ZFS Test Suite after smoke tests
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arch-vm-spike-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runtime:
+    name: Runtime / ${{ matrix.kernel }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        kernel: [linux, linux-lts]
+    env:
+      KERNEL_PACKAGE: ${{ matrix.kernel }}
+      MIRROR_URL: ${{ vars.MIRROR_URL }}
+      RUN_ZTS: ${{ inputs.zts && 'true' || 'false' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check runner and required mirror
+        run: |
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test -c /dev/kvm
+          test -n "$MIRROR_URL"
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils acl
+          sudo setfacl -m "u:$(id -un):rw" /dev/kvm
+
+      - name: Build the existing ArchZFS builder
+        run: docker build --build-arg "MIRROR_URL=$MIRROR_URL" -t archzfs-runtime-builder build-container
+
+      - name: Build fresh candidate packages without failover
+        timeout-minutes: 75
+        run: |
+          mkdir -p runtime-results
+          set -o pipefail
+          docker run --rm --privileged \
+            -e CI -e GITHUB_ACTIONS -e RUNNER_ENVIRONMENT -e GITHUB_SHA \
+            -e GITHUB_REPOSITORY -e GITHUB_RUN_ID -e KERNEL_PACKAGE -e MIRROR_URL \
+            -v "$PWD:/src" --entrypoint /bin/bash archzfs-runtime-builder \
+            /src/ci/runtime/build-candidate.sh 2>&1 | tee runtime-results/build.log
+
+      - name: Boot Arch and test installed candidate packages
+        timeout-minutes: 90
+        run: bash ci/runtime/run-vm.sh
+
+      - name: Retain candidate packages and evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: arch-runtime-${{ matrix.kernel }}-${{ github.run_attempt }}
+          path: |
+            runtime-results/
+            runtime-candidate/
+          if-no-files-found: warn
+          retention-days: 7
+          compression-level: 0

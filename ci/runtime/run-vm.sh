@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+set -euo pipefail
+[[ ${GITHUB_ACTIONS:-} == true && ${RUNNER_ENVIRONMENT:-} == github-hosted ]] || {
+    echo 'This spike boots VMs only on GitHub-hosted Actions runners.' >&2
+    exit 1
+}
+[[ ${MIRROR_URL:-} =~ ^https://[a-zA-Z0-9./:_-]+$ ]] || {
+    echo 'MIRROR_URL must be an HTTPS mirror base URL without shell metacharacters.' >&2
+    exit 1
+}
+case ${KERNEL_PACKAGE:-} in linux|linux-lts) ;; *) exit 1 ;; esac
+[[ ${RUN_ZTS:-false} == true || ${RUN_ZTS:-false} == false ]]
+test -r /dev/kvm && test -w /dev/kvm
+work=$(mktemp -d "$RUNNER_TEMP/archzfs-vm.XXXXXXXX")
+results="$PWD/runtime-results"
+mkdir -p "$results"
+ssh-keygen -q -t ed25519 -N '' -f "$work/id_ed25519"
+ssh_options=(-i "$work/id_ed25519" -p 10022 -o BatchMode=yes
+    -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5)
+scp_options=(-i "$work/id_ed25519" -P 10022 -o BatchMode=yes
+    -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5)
+# shellcheck disable=SC2029 # Callers deliberately supply commands to the guest.
+guest() { ssh "${ssh_options[@]}" ci@127.0.0.1 "$@"; }
+vm_pid=''
+stop_vm() {
+    if [[ -n $vm_pid ]]; then
+        kill "$vm_pid" 2>/dev/null || true
+        wait "$vm_pid" 2>/dev/null || true
+        vm_pid=''
+    fi
+}
+collect() {
+    status=$?
+    trap - EXIT
+    set +e
+    if [[ -n $vm_pid ]] && kill -0 "$vm_pid" 2>/dev/null; then
+        guest sudo journalctl -b --no-pager > "$results/guest-journal.txt" 2>&1
+        guest 'sudo tar -czf /tmp/guest-results.tar.gz /var/tmp/archzfs-results /var/tmp/test_results* 2>/dev/null; sudo chmod a+r /tmp/guest-results.tar.gz'
+        scp "${scp_options[@]}" ci@127.0.0.1:/tmp/guest-results.tar.gz "$results/"
+    fi
+    stop_vm
+    exit "$status"
+}
+trap collect EXIT
+
+image_url=https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2
+printf '%s\n' "$image_url" > "$results/image-url.txt"
+curl --fail --location --retry 3 "$image_url" -o "$work/base.qcow2"
+curl --fail --location --retry 3 "$image_url.SHA256" -o "$results/image.SHA256"
+curl --fail --location --retry 3 "$image_url.sig" -o "$work/base.qcow2.sig"
+digest=$(awk 'NR == 1 { print $1 }' "$results/image.SHA256")
+[[ $digest =~ ^[a-fA-F0-9]{64}$ ]]
+printf '%s  %s\n' "$digest" "$work/base.qcow2" | sha256sum --check
+# Verify the official image signature with the builder's current Arch keyring.
+docker run --rm --user root --entrypoint /bin/bash -v "$work:/vm:ro" \
+    archzfs-runtime-builder -c \
+    'pacman-key --verify /vm/base.qcow2.sig /vm/base.qcow2' \
+    2>&1 | tee "$results/image-signature.txt"
+qemu-img create -f qcow2 -F qcow2 -b "$work/base.qcow2" "$work/os.qcow2" 40G
+for i in 1 2 3; do
+    qemu-img create -f qcow2 "$work/scratch-$i.qcow2" 12G
+done
+cat > "$work/user-data" <<EOF
+#cloud-config
+hostname: archzfs-ci
+users:
+  - name: ci
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - $(cat "$work/id_ed25519.pub")
+growpart:
+  mode: auto
+  devices: ['/']
+resize_rootfs: true
+write_files:
+  - path: /etc/archzfs-ci-guest
+    content: disposable-github-actions-guest
+EOF
+printf 'instance-id: archzfs-%s\nlocal-hostname: archzfs-ci\n' "$GITHUB_RUN_ID" > "$work/meta-data"
+cloud-localds "$work/seed.iso" "$work/user-data" "$work/meta-data"
+
+start_vm() {
+    qemu-system-x86_64 -machine q35,accel=kvm -cpu host -m 4096 -smp 2 \
+        -display none -monitor none -serial "file:$results/serial-$1.log" \
+        -drive "file=$work/os.qcow2,if=virtio,format=qcow2,serial=archzfs-os" \
+        -drive "file=$work/seed.iso,media=cdrom,readonly=on" \
+        -drive "file=$work/scratch-1.qcow2,if=virtio,format=qcow2,serial=archzfs-test-1" \
+        -drive "file=$work/scratch-2.qcow2,if=virtio,format=qcow2,serial=archzfs-test-2" \
+        -drive "file=$work/scratch-3.qcow2,if=virtio,format=qcow2,serial=archzfs-test-3" \
+        -netdev user,id=net0,hostfwd=tcp:127.0.0.1:10022-:22 \
+        -device virtio-net-pci,netdev=net0 "${boot_args[@]}" &
+    vm_pid=$!
+    for ((attempt=0; attempt<90; attempt++)); do
+        kill -0 "$vm_pid" || { echo 'QEMU exited before SSH became available'; return 1; }
+        if guest true 2>/dev/null; then return 0; fi
+        sleep 3
+    done
+    echo 'Timed out waiting for guest SSH' >&2
+    return 1
+}
+boot_args=()
+start_vm prepare
+guest sudo cloud-init status --wait
+scp "${scp_options[@]}" -r runtime-candidate ci@127.0.0.1:/tmp/
+scp "${scp_options[@]}" ci/runtime/guest-{prepare,test}.sh ci@127.0.0.1:/tmp/
+guest "sudo bash /tmp/guest-prepare.sh '$KERNEL_PACKAGE' '$MIRROR_URL'"
+scp "${scp_options[@]}" ci@127.0.0.1:/tmp/archzfs-vmlinuz "$work/vmlinuz"
+scp "${scp_options[@]}" ci@127.0.0.1:/tmp/archzfs-initramfs.img "$work/initramfs.img"
+root_uuid=$(guest cat /var/tmp/archzfs-results/root-uuid)
+[[ $root_uuid =~ ^[a-fA-F0-9-]+$ ]]
+guest sudo systemctl poweroff || true
+for ((attempt=0; attempt<30; attempt++)); do
+    if ! kill -0 "$vm_pid" 2>/dev/null; then break; fi
+    sleep 2
+done
+if kill -0 "$vm_pid" 2>/dev/null; then
+    echo 'Guest did not shut down cleanly; refusing to boot a potentially dirty image.' >&2
+    exit 1
+fi
+stop_vm
+boot_args=(-kernel "$work/vmlinuz" -initrd "$work/initramfs.img"
+    -append "root=UUID=$root_uuid rw console=ttyS0")
+start_vm candidate
+guest "sudo bash /tmp/guest-test.sh '${RUN_ZTS:-false}'"
+printf 'PASS: %s package smoke tests; ZTS requested: %s\n' "$KERNEL_PACKAGE" "${RUN_ZTS:-false}" \
+    | tee "$results/result.txt" >> "$GITHUB_STEP_SUMMARY"
