@@ -51,10 +51,13 @@ curl --fail --location --retry 3 "$image_url.sig" -o "$work/base.qcow2.sig"
 digest=$(awk 'NR == 1 { print $1 }' "$results/image.SHA256")
 [[ $digest =~ ^[a-fA-F0-9]{64}$ ]]
 printf '%s  %s\n' "$digest" "$work/base.qcow2" | sha256sum --check
-# Verify the official image signature with the builder's current Arch keyring.
-docker run --rm --user root --entrypoint /bin/bash -v "$work:/vm:ro" \
-    archzfs-runtime-builder -c \
-    'pacman-key --verify /vm/base.qcow2.sig /vm/base.qcow2' \
+# Arch cloud images use the separate arch-boxes release key, not Pacman's
+# package keyring. Pin the official certificate and isolate it from other keys.
+mkdir -m 700 "$work/gnupg"
+gpg --batch --homedir "$work/gnupg" --dearmor --output "$work/arch-boxes.gpg" \
+    ci/runtime/keys/arch-boxes.asc
+gpgv --homedir "$work/gnupg" --keyring "$work/arch-boxes.gpg" \
+    "$work/base.qcow2.sig" "$work/base.qcow2" \
     2>&1 | tee "$results/image-signature.txt"
 qemu-img create -f qcow2 -F qcow2 -b "$work/base.qcow2" "$work/os.qcow2" 40G
 for i in 1 2 3; do

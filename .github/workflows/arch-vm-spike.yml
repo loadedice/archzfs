@@ -44,7 +44,7 @@ jobs:
           test -c /dev/kvm
           test -n "$MIRROR_URL"
           sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils acl
+          sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils acl gnupg
           sudo setfacl -m "u:$(id -un):rw" /dev/kvm
 
       - name: Build the existing ArchZFS builder

@@ -28,7 +28,8 @@ Each matrix job targets `linux` or `linux-lts`:
 2. Save the exact official kernel archive and signature, generated recipes,
    package metadata, source SHA, run ID, URLs, and SHA-256 manifest.
 3. Download an official Arch cloud image and verify its checksum and signature
-   against the Arch keyring in the freshly built builder image.
+   against the pinned official arch-boxes release key in `keys/`. This is a
+   separate trust anchor from the Arch package keyring.
 4. Boot a disposable KVM guest with three new virtual scratch disks. Update
    Arch, authenticate and install the retained official kernel, then install the
    unsigned candidate packages using a guest-only local Pacman repository.
