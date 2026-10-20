@@ -25,7 +25,13 @@ printf 'source=%s\nrepository=%s\nrun=%s\nkernel=%s\nmirror=%s\nfailover=disable
 sudo pacman -Syu --noconfirm
 sudo pacman -Sw --noconfirm --nodeps --nodeps --cachedir "$out/official" "$KERNEL_PACKAGE"
 kernel_url=$(pacman -Sp --nodeps --nodeps --print-format '%l' "$KERNEL_PACKAGE")
-curl --fail --location --retry 3 "$kernel_url.sig" -o "$out/official/${kernel_url##*/}.sig"
+kernel_archive="$out/official/${kernel_url##*/}"
+# Pacman normally saves the signature itself, owned by root. Reuse it rather
+# than trying to overwrite it as buildbot; fetch only when it was not retained.
+if [[ ! -s $kernel_archive.sig ]]; then
+    sudo curl --fail --location --retry 3 "$kernel_url.sig" -o "$kernel_archive.sig"
+fi
+sudo pacman-key --verify "$kernel_archive.sig" "$kernel_archive"
 printf '%s\n' "$kernel_url" > "$out/metadata/kernel-url.txt"
 
 sed -i "s/^THREADS=.*/THREADS=$(nproc)/" ~/.config/clean-chroot-manager.conf
