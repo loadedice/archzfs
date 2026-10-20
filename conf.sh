@@ -2,15 +2,19 @@
 #
 # FIXME: reset all kernel configs set to pkgrel=1 when this changes
 #
-openzfs_version="2.4.0"
+openzfs_version="2.4.4"
+
+# RC packages are currently disabled. These retained values are not production
+# release inputs; review the complete RC path before updating or re-enabling it.
 openzfs_rc_version="2.4.0-rc1"
 
 # The OpenZFS source hashes are from github.com/openzfs/zfs/releases
-zfs_src_hash="7bdf13de0a71d95554c0e3e47d5e8f50786c30d4f4b63b7c593b1d11af75c9ee"
+zfs_src_hash="2a3c70d55a37cc71618a95a60e81ad66530201eb118d37741dc92efcf848c8b1"
 zfs_rc_src_hash="0068102a4162d7445b80218b882ff54e1acf3cfbeef909d53bd984ddcd9339b1"
 
-zfs_initcpio_install_hash="d19476c6a599ebe3415680b908412c8f19315246637b3a61e811e2e0961aea78"
-zfs_initcpio_hook_hash="569089e5c539097457a044ee8e7ab9b979dec48f69760f993a6648ee0f21c222"
+zfs_initcpio_install_hash="c9d53245ce68ccc3e75ccec5390391a92227096e1771943ab0aaf64f977db7c0"
+zfs_initcpio_hook_hash="0192bab80bf4bc028034b9e98b18975a0b1fd2acacae8ff8910f5cac0bf2488e"
+zfs_initcpio_tpm2_provider_hash="bd346812225e9a2ef3b3f0541510b56e1506a699c47f6c0cd1ca4f35ccbc4364"
 zfs_initcpio_zfsencryptssh_install="93e6ac4e16f6b38b2fa397a63327bcf7001111e3a58eb5fb97c888098c932a51"
 
 # Notification address

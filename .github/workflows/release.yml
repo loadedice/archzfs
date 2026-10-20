@@ -23,9 +23,7 @@ on:
     branches: [master]
     paths:
       - '**.sh'
-      - '.github/workflows/**'
-      - '!.github/workflows/watcher.yml'
-      - '!.github/workflows/update-zfs.yml'
+      - '.github/workflows/release.yml'
       - 'build-container/**'
       - 'packages/**'
 
@@ -34,7 +32,7 @@ run-name: ${{ inputs.kernel_version || 'Manual/Cron' }} release
 
 concurrency:
   group: release
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -53,7 +51,7 @@ jobs:
     steps:
 
       - name: Checkout code
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
 
       - name: Build builder container
         env:
@@ -85,7 +83,7 @@ jobs:
         run: gh release delete --yes "${{ env.TEMP_RELEASE_NAME }}" || true
 
       - name: Publish mainline to a temporary release
-        uses: ncipollo/release-action@v1.20.0
+        uses: ncipollo/release-action@v1.21.0
         with:
           name: ${{ env.TEMP_RELEASE_NAME }}
           tag: ${{ env.TEMP_RELEASE_NAME }}
@@ -119,7 +117,7 @@ jobs:
           force_push_tag: true
 
       - name: Release failover
-        uses: ncipollo/release-action@v1.20.0
+        uses: ncipollo/release-action@v1.21.0
         with:
           name: ${{ env.FAILOVER_RELEASE_NAME }}
           tag: ${{ env.FAILOVER_RELEASE_NAME }}

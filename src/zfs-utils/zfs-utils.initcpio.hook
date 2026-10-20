@@ -8,6 +8,30 @@ ZPOOL_FORCE=""
 ZPOOL_IMPORT_FLAGS=""
 ZFS_BOOT_ONLY=""
 
+zfs_try_load_key_provider() {
+    local DATASET=$1
+    local ENCRYPTIONROOT=$2
+    local KEYLOCATION=$3
+    local BOOT_DATASET=$4
+    local ZFS=zfs
+    local ZPOOL=zpool
+    local load_key_provider
+
+    for load_key_provider in \
+        /etc/zfs/initramfs-tools-load-key \
+        /etc/zfs/initramfs-tools-load-key.d/*; do
+        [ -f "${load_key_provider}" ] || continue
+        [ -r "${load_key_provider}" ] || continue
+
+        if (. "${load_key_provider}") &&
+            [ "$(zfs get -H -o value keystatus "${ENCRYPTIONROOT}")" = "available" ]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 zfs_get_bootfs () {
     for zfs_dataset in $(zpool list -H -o bootfs); do
         case ${zfs_dataset} in
@@ -62,7 +86,7 @@ zfs_decrypt_fs() {
                 udevadm settle
 
                 # Wait for udev up to 10 seconds
-                if [ ! -r "${keyfile}" ]; then 
+                if [ ! -r "${keyfile}" ]; then
                     echo "Waiting for key ${keyfile} for ${encryptionroot}..."
                     for _ in $(seq 1 20); do
                         sleep 0.5s
@@ -76,6 +100,13 @@ zfs_decrypt_fs() {
             fi
         fi
     fi
+
+    # Try optional alternate key-loading providers before interactive fallback.
+    zfs_try_load_key_provider \
+        "${dataset}" \
+        "${encryptionroot}" \
+        "${keylocation}" \
+        "${ZFS_DATASET}" || true
 
     # Loop until key is loaded here or by another vector (SSH, for instance)
     while [ "$(zfs get -H -o value keystatus "${encryptionroot}")" != "available" ]; do

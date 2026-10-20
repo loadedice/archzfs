@@ -10,25 +10,27 @@ on:
 name: Test
 
 concurrency:
-  group: test
+  group: test-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 env:
-  RELEASE_NAME: testing
   FAILOVER_RELEASE_NAME: failover
 
 jobs:
   test:
-    name: Test release
+    name: Build packages
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
 
       - name: Checkout code
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Build builder container
         env:
@@ -41,22 +43,11 @@ jobs:
       - name: Run builder container
         run: docker run -e FAILOVER_RELEASE_NAME --privileged --rm -v "$(pwd):/src" archzfs-builder
 
-      - name: Release testing
-        uses: ncipollo/release-action@v1.20.0
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ env.RELEASE_NAME }}
-          tag: ${{ env.RELEASE_NAME }}
-          commit: ${{ github.sha }}
-          artifacts: ./repo/*
-          allowUpdates: true
-          artifactErrorsFailBuild: true
-          omitBody: true
-          omitBodyDuringUpdate: true
-          removeArtifacts: true
-          prerelease: true
-
-      - name: Tag the testing release
-        uses: rickstaa/action-create-tag@v1.7.2
-        with:
-          tag: ${{ env.RELEASE_NAME }}
-          force_push_tag: true
+          name: archzfs-packages-pr-${{ github.event.pull_request.number }}-${{ github.run_attempt }}
+          path: ./repo/*
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
