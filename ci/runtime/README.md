@@ -18,9 +18,19 @@ while fork workflows were disabled, push another change under `ci/runtime/` to
 start the branch workflow. GitHub's manual dispatch UI requires the workflow
 file to exist on the default branch; until then, branch pushes run smoke tests.
 
+While iterating on VM setup, the workflow defaults to reusing both completed
+candidate builds from run `39414535555`. This skips the builder image and all
+package compilation. `reuse-candidate.sh` verifies the artifact manifest and
+recorded provenance, rejects changes to packaging/build inputs since that run,
+and records the distinct build and harness SHAs. Expired or incomplete artifacts
+fail explicitly. Change the workflow's run ID (or manual `candidate_run` input)
+to `fresh` when a rebuild is required. This temporary pin is for spike iteration,
+not a production package-selection policy.
+
 ## What it exercises
 
-Each matrix job targets `linux` or `linux-lts`:
+Each matrix job targets `linux` or `linux-lts`. Fresh mode builds the candidates
+below; reuse mode downloads the recorded candidates before booting the VM:
 
 1. Build the existing builder image and regenerate utilities and kernel recipes
    from this control-repository commit. Build fresh `zfs-utils`, `zfs-tests`, and
@@ -91,5 +101,5 @@ its executed/skipped test counts and failures before relying on its coverage.
 For production integration, separate the candidate build from VM jobs, reuse
 exact per-kernel artifacts, and make promotion depend on explicit runtime
 results. Preserve the existing publication critical section and fork-safe token
-boundary. This spike requests read-only contents access, persists no checkout
+boundary. This spike requests read-only contents and Actions access, persists no checkout
 credentials, and uses no repository secrets or signing environment.

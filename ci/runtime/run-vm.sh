@@ -86,16 +86,20 @@ cloud-localds "$work/seed.iso" "$work/user-data" "$work/meta-data"
 start_vm() {
     qemu-system-x86_64 -machine q35,accel=kvm -cpu host -m 4096 -smp 2 \
         -display none -monitor none -serial "file:$results/serial-$1.log" \
-        -drive "file=$work/os.qcow2,if=virtio,format=qcow2,serial=archzfs-os" \
+        -drive "file=$work/os.qcow2,if=none,id=os,format=qcow2" \
+        -device virtio-blk-pci,drive=os,serial=archzfs-os \
         -drive "file=$work/seed.iso,media=cdrom,readonly=on" \
-        -drive "file=$work/scratch-1.qcow2,if=virtio,format=qcow2,serial=archzfs-test-1" \
-        -drive "file=$work/scratch-2.qcow2,if=virtio,format=qcow2,serial=archzfs-test-2" \
-        -drive "file=$work/scratch-3.qcow2,if=virtio,format=qcow2,serial=archzfs-test-3" \
+        -drive "file=$work/scratch-1.qcow2,if=none,id=scratch1,format=qcow2" \
+        -device virtio-blk-pci,drive=scratch1,serial=archzfs-test-1 \
+        -drive "file=$work/scratch-2.qcow2,if=none,id=scratch2,format=qcow2" \
+        -device virtio-blk-pci,drive=scratch2,serial=archzfs-test-2 \
+        -drive "file=$work/scratch-3.qcow2,if=none,id=scratch3,format=qcow2" \
+        -device virtio-blk-pci,drive=scratch3,serial=archzfs-test-3 \
         -netdev user,id=net0,hostfwd=tcp:127.0.0.1:10022-:22 \
         -device virtio-net-pci,netdev=net0 "${boot_args[@]}" &
     vm_pid=$!
     for ((attempt=0; attempt<90; attempt++)); do
-        kill -0 "$vm_pid" || { echo 'QEMU exited before SSH became available'; return 1; }
+        kill -0 "$vm_pid" 2>/dev/null || { echo 'QEMU exited before SSH became available'; return 1; }
         if guest true 2>/dev/null; then return 0; fi
         sleep 3
     done

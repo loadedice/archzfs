@@ -8,6 +8,10 @@ on:
       - 'ci/runtime/**'
   workflow_dispatch:
     inputs:
+      candidate_run:
+        description: Existing candidate run ID, or fresh to rebuild packages
+        type: string
+        default: '39414535555'
       zts:
         description: Run the packaged upstream ZFS Test Suite after smoke tests
         type: boolean
@@ -15,6 +19,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: arch-vm-spike-${{ github.ref }}
@@ -33,6 +38,9 @@ jobs:
       KERNEL_PACKAGE: ${{ matrix.kernel }}
       MIRROR_URL: ${{ vars.MIRROR_URL }}
       RUN_ZTS: ${{ inputs.zts && 'true' || 'false' }}
+      # Reuse the completed builds while iterating on VM setup. Set to fresh
+      # when packaging inputs change; the reuse script checks that boundary.
+      CANDIDATE_RUN_ID: ${{ inputs.candidate_run || '39414535555' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -48,9 +56,11 @@ jobs:
           sudo setfacl -m "u:$(id -un):rw" /dev/kvm
 
       - name: Build the existing ArchZFS builder
+        if: env.CANDIDATE_RUN_ID == 'fresh'
         run: docker build --build-arg "MIRROR_URL=$MIRROR_URL" -t archzfs-runtime-builder build-container
 
       - name: Build fresh candidate packages without failover
+        if: env.CANDIDATE_RUN_ID == 'fresh'
         timeout-minutes: 75
         run: |
           mkdir -p runtime-results
@@ -68,6 +78,12 @@ jobs:
           # Return it to the host runner before VM setup and artifact upload,
           # including when the container exits with a build failure.
           sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
+
+      - name: Reuse recorded candidate packages
+        if: env.CANDIDATE_RUN_ID != 'fresh'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash ci/runtime/reuse-candidate.sh
 
       - name: Boot Arch and test installed candidate packages
         timeout-minutes: 90
