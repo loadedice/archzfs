@@ -46,6 +46,13 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Validate harness shell syntax
+        run: |
+          for script in ci/runtime/*.sh; do
+            bash -n "$script"
+          done
+          git show --format= --check HEAD
+
       - name: Check runner and required mirror
         run: |
           test "$RUNNER_ENVIRONMENT" = github-hosted

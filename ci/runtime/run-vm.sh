@@ -104,12 +104,18 @@ start_vm() {
         -netdev user,id=net0,hostfwd=tcp:127.0.0.1:10022-:22 \
         -device virtio-net-pci,netdev=net0 "${boot_args[@]}" &
     vm_pid=$!
-    for ((attempt=0; attempt<90; attempt++)); do
-        kill -0 "$vm_pid" 2>/dev/null || { echo 'QEMU exited before SSH became available'; return 1; }
+    local deadline=$((SECONDS + 300))
+    while ((SECONDS < deadline)); do
+        if ! kill -0 "$vm_pid" 2>/dev/null; then
+            echo 'QEMU exited before SSH became available' >&2
+            tail -n 80 "$results/serial-$1.log" >&2
+            return 1
+        fi
         if guest true 2>/dev/null; then return 0; fi
         sleep 3
     done
     echo 'Timed out waiting for guest SSH' >&2
+    tail -n 80 "$results/serial-$1.log" >&2
     return 1
 }
 boot_args=()
@@ -134,7 +140,9 @@ if kill -0 "$vm_pid" 2>/dev/null; then
 fi
 stop_vm
 boot_args=(-kernel "$work/vmlinuz" -initrd "$work/initramfs.img"
-    -append "root=UUID=$root_uuid rw console=ttyS0")
+    # The cloud image configures eth0. Its normal boot disables predictable
+    # interface naming; preserve that when bypassing its bootloader.
+    -append "root=UUID=$root_uuid rw console=ttyS0 net.ifnames=0")
 start_vm candidate
 guest "sudo bash /var/tmp/archzfs-ci/guest-test.sh '${RUN_ZTS:-false}'"
 printf 'PASS: %s package smoke tests; ZTS requested: %s\n' "$KERNEL_PACKAGE" "${RUN_ZTS:-false}" \
