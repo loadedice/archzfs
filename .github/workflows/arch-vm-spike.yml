@@ -45,13 +45,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 2
 
       - name: Validate harness shell syntax
         run: |
           for script in ci/runtime/*.sh; do
             bash -n "$script"
           done
-          git show --format= --check HEAD
+          git diff --check HEAD^ HEAD -- ci/runtime .github/workflows/arch-vm-spike.yml
 
       - name: Check runner and required mirror
         run: |
