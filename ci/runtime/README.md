@@ -73,6 +73,8 @@ its executed/skipped test counts and failures before relying on its coverage.
   or dependency installation; it must not silently substitute another kernel.
 - The package build still uses the repository's existing privileged container
   and clean-chroot-manager. It requires substantial runner disk and time.
+  The workflow restores checkout ownership to the Actions runner after the
+  container exits, including on failure, before VM setup and artifact upload.
 - ZTS uses the three scratch devices and passwordless sudo inside the VM.
   Only loopback SSH is exposed; its key and VM disks are never uploaded. No host
   block devices or checkout are mounted into the VM.

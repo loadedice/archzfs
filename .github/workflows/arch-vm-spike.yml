@@ -61,6 +61,14 @@ jobs:
             -v "$PWD:/src" --entrypoint /bin/bash archzfs-runtime-builder \
             /src/ci/runtime/build-candidate.sh 2>&1 | tee runtime-results/build.log
 
+      - name: Restore runner ownership after the build container
+        if: always()
+        run: |
+          # The builder recursively assigns the mounted checkout to buildbot.
+          # Return it to the host runner before VM setup and artifact upload,
+          # including when the container exits with a build failure.
+          sudo chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
+
       - name: Boot Arch and test installed candidate packages
         timeout-minutes: 90
         run: bash ci/runtime/run-vm.sh
