@@ -5,10 +5,23 @@ scope=${1:-full}
 shard=${2:-all}
 results=/var/tmp/archzfs-results
 
-# These are test prerequisites; ZFS packages and upstream tests remain unchanged.
-pacman -S --needed --noconfirm jq nfs-utils rsync words xfsprogs cryptsetup samba
+# These are test prerequisites; the ZFS implementation remains unchanged.
+pacman -S --needed --noconfirm jq nfs-utils rsync words xfsprogs cryptsetup samba patch
 systemctl start nfs-server.service
 pacman -Q > "$results/suite-installed-packages.txt"
+
+# Backport upstream's exported-pool cleanup fix to the packaged 2.4.4 test.
+# Preserve the original, exact patch and digests as part of runtime evidence.
+test_file=/usr/share/zfs/zfs-tests/tests/functional/device_access/device_access_import.ksh
+test_patch=/var/tmp/archzfs-ci/device-access-import-cleanup.patch
+cp "$test_file" "$results/device-access-import-original.ksh"
+cp "$test_patch" "$results/"
+printf '%s\n' 'openzfs/zfs 1c8a75f7d3f0aa81ea3560540e706a8fc3808a8f' \
+    > "$results/test-backport-source.txt"
+sha256sum "$test_file" "$test_patch" > "$results/test-backport-before.sha256"
+patch --batch --forward --fuzz=0 "$test_file" < "$test_patch" \
+    | tee "$results/test-backport.log"
+sha256sum "$test_file" > "$results/test-backport-after.sha256"
 
 # Match upstream's XFS test-work volume and loopback/scsi_debug strategy. Keep
 # the OS and retained diagnostics on their own filesystem, outside this volume.

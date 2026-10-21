@@ -11,7 +11,7 @@ set -euo pipefail
 case ${KERNEL_PACKAGE:-} in linux|linux-lts) ;; *) exit 1 ;; esac
 [[ ${RUN_ZTS:-false} == true || ${RUN_ZTS:-false} == false ]]
 [[ ${ZTS_DIAGNOSE:-false} == true || ${ZTS_DIAGNOSE:-false} == false ]]
-case ${ZTS_SCOPE:-full} in full|focus|tail|unresolved|after-fault|probe|resume) ;; *) exit 1 ;; esac
+case ${ZTS_SCOPE:-full} in full|focus|tail|unresolved|after-fault|probe|resume|cleanup) ;; *) exit 1 ;; esac
 [[ ${ZTS_SHARD:-all} == all || ${ZTS_SHARD:-all} =~ ^[1-9][0-9]*/[1-9][0-9]*$ ]] || exit 1
 test -r /dev/kvm && test -w /dev/kvm
 work=$(mktemp -d "$RUNNER_TEMP/archzfs-vm.XXXXXXXX")
@@ -130,6 +130,7 @@ guest sudo install -d -o ci -g ci /var/tmp/archzfs-ci
 scp "${scp_options[@]}" -r runtime-candidate ci@127.0.0.1:/var/tmp/archzfs-ci/
 scp "${scp_options[@]}" ci/runtime/guest-*.sh ci@127.0.0.1:/var/tmp/archzfs-ci/
 scp "${scp_options[@]}" ci/runtime/select-runfile.py ci@127.0.0.1:/var/tmp/archzfs-ci/
+scp "${scp_options[@]}" ci/runtime/device-access-import-cleanup.patch ci@127.0.0.1:/var/tmp/archzfs-ci/
 guest "sudo bash /var/tmp/archzfs-ci/guest-prepare.sh '$KERNEL_PACKAGE' '$MIRROR_URL'"
 scp "${scp_options[@]}" ci@127.0.0.1:/tmp/archzfs-vmlinuz "$work/vmlinuz"
 scp "${scp_options[@]}" ci@127.0.0.1:/tmp/archzfs-initramfs.img "$work/initramfs.img"

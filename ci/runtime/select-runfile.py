@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 scope, target = sys.argv[1:]
-if scope not in {"full", "focus", "tail", "unresolved", "after-fault", "probe", "resume"}:
+if scope not in {"full", "focus", "tail", "unresolved", "after-fault", "probe", "resume", "cleanup"}:
     raise SystemExit("Invalid test scope")
 
 focus = {
@@ -32,7 +32,14 @@ for name in ("common.run", "linux.run"):
         directory = section.split(":", 1)[0]
         group = directory.removeprefix("tests/functional/")
         tests = ast.literal_eval(source.get(section, "tests", fallback="[]"))
-        if scope in {"probe", "resume"}:
+        if scope == "cleanup":
+            regression = {
+                "device_access": {"device_access_import"},
+                "features/large_dnode": {"large_dnode_009_pos"},
+                "inuse": {"inuse_004_pos"},
+            }
+            tests = [test for test in tests if test in regression.get(group, set())]
+        elif scope in {"probe", "resume"}:
             wanted = "suspend_on_probe_errors" if scope == "probe" else "suspend_resume_single"
             tests = [test for test in tests if group == "fault" and test == wanted]
         elif scope in {"focus", "unresolved"}:

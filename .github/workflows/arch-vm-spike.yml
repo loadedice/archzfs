@@ -17,7 +17,7 @@ on:
         description: full suite, newly unresolved failures, or untested LTS tail
         type: choice
         default: full
-        options: [full, focus, tail, unresolved, after-fault, probe, resume]
+        options: [full, focus, tail, unresolved, after-fault, probe, resume, cleanup]
       shard:
         description: all, or an upstream test-group fraction such as 1/4
         type: string

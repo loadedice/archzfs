@@ -56,6 +56,16 @@ already supports an Arch cloud-image target. This spike uses a smaller harness
 because its inputs are ArchZFS package artifacts rather than an upstream source
 build. No upstream test sources are vendored.
 
+For the pinned 2.4.4 candidates, ZTS applies the upstream test-only cleanup fix
+[1c8a75f](https://github.com/openzfs/zfs/commit/1c8a75f7d3f0aa81ea3560540e706a8fc3808a8f).
+It clears labels left by `device_access_import` so subsequent tests do not
+discover an unrelated exported pool with the same name. The original installed
+test, patch, upstream commit, application log and before/after digests are
+retained. ZFS binaries and test assertions are unchanged. Patch mismatch fails
+explicitly; revisit this backport when updating the candidate generation.
+Manual scope `cleanup` runs that test followed by `large_dnode_009_pos` and
+`inuse_004_pos`, the two tests affected by the residual pool in the full run.
+
 [QEMU workflow]: https://github.com/openzfs/zfs/blob/master/.github/workflows/zfs-qemu.yml
 [ZTS instructions]: https://github.com/openzfs/zfs/blob/master/tests/README.md
 
