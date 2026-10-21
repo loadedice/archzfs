@@ -145,10 +145,16 @@ if kill -0 "$vm_pid" 2>/dev/null; then
     exit 1
 fi
 stop_vm
+diagnostic_boot_args=''
+if [[ ${ZTS_SCOPE:-full} == probe ]]; then
+    # Keep watchdog stack dumps on the serial console even when the Arch
+    # image's console log level hides them and a wedged guest cannot use SSH.
+    diagnostic_boot_args=' ignore_loglevel'
+fi
 boot_args=(-kernel "$work/vmlinuz" -initrd "$work/initramfs.img"
     # The cloud image configures eth0. Its normal boot disables predictable
     # interface naming; preserve that when bypassing its bootloader.
-    -append "root=UUID=$root_uuid rw console=ttyS0 net.ifnames=0")
+    -append "root=UUID=$root_uuid rw console=ttyS0 net.ifnames=0$diagnostic_boot_args")
 start_vm candidate
 test_budget=270m
 case ${ZTS_SCOPE:-full} in probe|resume) test_budget=20m ;; esac
