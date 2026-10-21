@@ -29,7 +29,7 @@ jobs:
   runtime:
     name: Runtime / ${{ matrix.kernel }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 360
     strategy:
       fail-fast: false
       matrix:
@@ -94,7 +94,7 @@ jobs:
         run: bash ci/runtime/reuse-candidate.sh
 
       - name: Boot Arch and test installed candidate packages
-        timeout-minutes: 90
+        timeout-minutes: 300
         run: bash ci/runtime/run-vm.sh
 
       - name: Retain candidate packages and evidence

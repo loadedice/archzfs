@@ -95,6 +95,7 @@ its executed/skipped test counts and failures before relying on its coverage.
 - Smoke tests do not persist a pool across another guest reboot yet.
 - Full ZTS can exceed the job's time budget or need additional optional tools;
   preserve such failures rather than treating them as successful skips.
+  The VM/test step allows five hours, within a six-hour overall job limit.
 - No release promotion, cancellation, mirror-outage, or watcher tests are added
   here. Those require separate tests of the automation itself.
 
