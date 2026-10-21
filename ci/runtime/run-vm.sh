@@ -64,9 +64,9 @@ gpgv --homedir "$work/gnupg" --keyring "$work/arch-boxes.gpg" \
     2>&1 | tee "$results/image-signature.txt"
 qemu-img create -f qcow2 -F qcow2 -b "$work/base.qcow2" "$work/os.qcow2" 40G
 for i in 1 2 3; do
-    size=12G
-    [[ $i != 1 ]] || size=64G
-    qemu-img create -f qcow2 "$work/scratch-$i.qcow2" "$size"
+    # Equal logical sizes are required by the initial mirrored-pool smoke test.
+    # Images remain sparse; ZTS subsequently uses 3G loopbacks on disk 1's XFS.
+    qemu-img create -f qcow2 "$work/scratch-$i.qcow2" 64G
 done
 cat > "$work/user-data" <<EOF
 #cloud-config
