@@ -40,7 +40,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: ${{ inputs.diagnose && 'arch-vm-diagnose' || 'arch-vm-spike' }}-${{ github.ref }}-${{ inputs.scope || 'full' }}-${{ inputs.shard || 'all' }}
+  group: ${{ inputs.diagnose && 'arch-vm-diagnose' || 'arch-vm-spike' }}-${{ github.ref }}-${{ inputs.kernel || 'both' }}-${{ inputs.scope || 'full' }}-${{ inputs.shard || 'all' }}
   cancel-in-progress: true
 
 jobs:
