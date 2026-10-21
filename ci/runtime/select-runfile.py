@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 scope, target = sys.argv[1:]
-if scope not in {"full", "focus", "tail"}:
+if scope not in {"full", "focus", "tail", "unresolved", "after-fault", "probe", "resume"}:
     raise SystemExit("Invalid test scope")
 
 focus = {
@@ -32,8 +32,17 @@ for name in ("common.run", "linux.run"):
         directory = section.split(":", 1)[0]
         group = directory.removeprefix("tests/functional/")
         tests = ast.literal_eval(source.get(section, "tests", fallback="[]"))
-        if scope == "focus":
+        if scope in {"probe", "resume"}:
+            wanted = "suspend_on_probe_errors" if scope == "probe" else "suspend_resume_single"
+            tests = [test for test in tests if group == "fault" and test == wanted]
+        elif scope in {"focus", "unresolved"}:
             tests = [test for test in tests if test in focus.get(group, set())]
+            if scope == "unresolved":
+                tests = [test for test in tests if test not in
+                         {"suspend_on_probe_errors", "suspend_resume_single"}]
+        elif scope == "after-fault":
+            if directory <= "tests/functional/fault":
+                tests = []
         elif scope == "tail":
             # The original LTS run completed scrub_after_resilver in fault,
             # then stopped. Execution is ordered by directory, not runfile order.

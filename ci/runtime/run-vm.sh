@@ -11,7 +11,7 @@ set -euo pipefail
 case ${KERNEL_PACKAGE:-} in linux|linux-lts) ;; *) exit 1 ;; esac
 [[ ${RUN_ZTS:-false} == true || ${RUN_ZTS:-false} == false ]]
 [[ ${ZTS_DIAGNOSE:-false} == true || ${ZTS_DIAGNOSE:-false} == false ]]
-case ${ZTS_SCOPE:-full} in full|focus|tail) ;; *) exit 1 ;; esac
+case ${ZTS_SCOPE:-full} in full|focus|tail|unresolved|after-fault|probe|resume) ;; *) exit 1 ;; esac
 [[ ${ZTS_SHARD:-all} == all || ${ZTS_SHARD:-all} =~ ^[1-9][0-9]*/[1-9][0-9]*$ ]] || exit 1
 test -r /dev/kvm && test -w /dev/kvm
 work=$(mktemp -d "$RUNNER_TEMP/archzfs-vm.XXXXXXXX")
@@ -150,7 +150,9 @@ boot_args=(-kernel "$work/vmlinuz" -initrd "$work/initramfs.img"
     # interface naming; preserve that when bypassing its bootloader.
     -append "root=UUID=$root_uuid rw console=ttyS0 net.ifnames=0")
 start_vm candidate
-timeout --signal=INT --kill-after=30s 270m ssh "${ssh_options[@]}" ci@127.0.0.1 \
+test_budget=270m
+case ${ZTS_SCOPE:-full} in probe|resume) test_budget=20m ;; esac
+timeout --signal=INT --kill-after=30s "$test_budget" ssh "${ssh_options[@]}" ci@127.0.0.1 \
     "sudo bash /var/tmp/archzfs-ci/guest-test.sh '${RUN_ZTS:-false}' '${ZTS_DIAGNOSE:-false}' '${ZTS_SCOPE:-full}' '${ZTS_SHARD:-all}'"
 printf 'PASS: %s package smoke tests; ZTS requested: %s\n' "$KERNEL_PACKAGE" "${RUN_ZTS:-false}" \
     | tee "$results/result.txt" >> "$GITHUB_STEP_SUMMARY"
