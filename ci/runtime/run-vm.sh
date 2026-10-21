@@ -10,6 +10,7 @@ set -euo pipefail
 }
 case ${KERNEL_PACKAGE:-} in linux|linux-lts) ;; *) exit 1 ;; esac
 [[ ${RUN_ZTS:-false} == true || ${RUN_ZTS:-false} == false ]]
+[[ ${ZTS_DIAGNOSE:-false} == true || ${ZTS_DIAGNOSE:-false} == false ]]
 test -r /dev/kvm && test -w /dev/kvm
 work=$(mktemp -d "$RUNNER_TEMP/archzfs-vm.XXXXXXXX")
 results="$PWD/runtime-results"
@@ -123,7 +124,7 @@ start_vm prepare
 guest sudo cloud-init status --wait
 guest sudo install -d -o ci -g ci /var/tmp/archzfs-ci
 scp "${scp_options[@]}" -r runtime-candidate ci@127.0.0.1:/var/tmp/archzfs-ci/
-scp "${scp_options[@]}" ci/runtime/guest-{prepare,test}.sh ci@127.0.0.1:/var/tmp/archzfs-ci/
+scp "${scp_options[@]}" ci/runtime/guest-*.sh ci@127.0.0.1:/var/tmp/archzfs-ci/
 guest "sudo bash /var/tmp/archzfs-ci/guest-prepare.sh '$KERNEL_PACKAGE' '$MIRROR_URL'"
 scp "${scp_options[@]}" ci@127.0.0.1:/tmp/archzfs-vmlinuz "$work/vmlinuz"
 scp "${scp_options[@]}" ci@127.0.0.1:/tmp/archzfs-initramfs.img "$work/initramfs.img"
@@ -144,6 +145,6 @@ boot_args=(-kernel "$work/vmlinuz" -initrd "$work/initramfs.img"
     # interface naming; preserve that when bypassing its bootloader.
     -append "root=UUID=$root_uuid rw console=ttyS0 net.ifnames=0")
 start_vm candidate
-guest "sudo bash /var/tmp/archzfs-ci/guest-test.sh '${RUN_ZTS:-false}'"
+guest "sudo bash /var/tmp/archzfs-ci/guest-test.sh '${RUN_ZTS:-false}' '${ZTS_DIAGNOSE:-false}'"
 printf 'PASS: %s package smoke tests; ZTS requested: %s\n' "$KERNEL_PACKAGE" "${RUN_ZTS:-false}" \
     | tee "$results/result.txt" >> "$GITHUB_STEP_SUMMARY"

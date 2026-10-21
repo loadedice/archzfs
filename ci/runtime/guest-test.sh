@@ -5,7 +5,9 @@ set -euo pipefail
     exit 1
 }
 run_zts=${1:-false}
+diagnose=${2:-false}
 [[ $run_zts == true || $run_zts == false ]]
+[[ $diagnose == true || $diagnose == false ]]
 results=/var/tmp/archzfs-results
 exec > >(tee "$results/runtime.log") 2>&1
 trap 'dmesg > /var/tmp/archzfs-results/dmesg.txt' EXIT
@@ -51,6 +53,11 @@ zpool status -v "$pool" | tee "$results/pool-status.txt"
 zpool destroy "$pool"
 trap 'dmesg > /var/tmp/archzfs-results/dmesg.txt' EXIT
 printf 'PASS: package/module/kernel smoke tests\n' | tee "$results/smoke-result.txt"
+
+if [[ $diagnose == true ]]; then
+    bash /var/tmp/archzfs-ci/guest-diagnose.sh
+    exit
+fi
 
 if [[ $run_zts == true ]]; then
     # The packaged suite is built from the same source as the installed utilities.

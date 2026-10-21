@@ -8,6 +8,10 @@ on:
       - 'ci/runtime/**'
   workflow_dispatch:
     inputs:
+      diagnose:
+        description: Diagnose the nine unexpected failures with controlled reruns
+        type: boolean
+        default: false
       candidate_run:
         description: Existing candidate run ID, or fresh to rebuild packages
         type: string
@@ -22,7 +26,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: arch-vm-spike-${{ github.ref }}
+  group: ${{ inputs.diagnose && 'arch-vm-diagnose' || 'arch-vm-spike' }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -38,6 +42,7 @@ jobs:
       KERNEL_PACKAGE: ${{ matrix.kernel }}
       MIRROR_URL: ${{ vars.MIRROR_URL }}
       RUN_ZTS: ${{ inputs.zts && 'true' || 'false' }}
+      ZTS_DIAGNOSE: ${{ inputs.diagnose && 'true' || 'false' }}
       # Reuse the completed builds while iterating on VM setup. Set to fresh
       # when packaging inputs change; the reuse script checks that boundary.
       CANDIDATE_RUN_ID: ${{ inputs.candidate_run || '39414535555' }}
