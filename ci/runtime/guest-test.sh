@@ -60,12 +60,7 @@ if [[ $diagnose == true ]]; then
 fi
 
 if [[ $run_zts == true ]]; then
-    # The packaged suite is built from the same source as the installed utilities.
-    # No source-tree checkout or replacement module is used.
-    test -x /usr/share/zfs/zfs-tests.sh
-    sudo -u ci env DISKS='vdb vdc vdd' \
-        /usr/share/zfs/zfs-tests.sh -v 2>&1 | tee "$results/zts-console.txt"
-    printf 'PASS: packaged upstream ZTS\n' > "$results/zts-result.txt"
+    bash /var/tmp/archzfs-ci/guest-suite.sh "${3:-full}" "${4:-all}"
 else
     printf 'NOT RUN: optional ZTS\n' > "$results/zts-result.txt"
 fi

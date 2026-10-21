@@ -11,6 +11,8 @@ set -euo pipefail
 case ${KERNEL_PACKAGE:-} in linux|linux-lts) ;; *) exit 1 ;; esac
 [[ ${RUN_ZTS:-false} == true || ${RUN_ZTS:-false} == false ]]
 [[ ${ZTS_DIAGNOSE:-false} == true || ${ZTS_DIAGNOSE:-false} == false ]]
+case ${ZTS_SCOPE:-full} in full|focus|tail) ;; *) exit 1 ;; esac
+[[ ${ZTS_SHARD:-all} == all || ${ZTS_SHARD:-all} =~ ^[1-9][0-9]*/[1-9][0-9]*$ ]] || exit 1
 test -r /dev/kvm && test -w /dev/kvm
 work=$(mktemp -d "$RUNNER_TEMP/archzfs-vm.XXXXXXXX")
 results="$PWD/runtime-results"
@@ -35,9 +37,9 @@ collect() {
     trap - EXIT
     set +e
     if [[ -n $vm_pid ]] && kill -0 "$vm_pid" 2>/dev/null; then
-        guest sudo journalctl -b --no-pager > "$results/guest-journal.txt" 2>&1
-        guest 'sudo tar -czf /tmp/guest-results.tar.gz /var/tmp/archzfs-results /var/tmp/test_results* 2>/dev/null; sudo chmod a+r /tmp/guest-results.tar.gz'
-        scp "${scp_options[@]}" ci@127.0.0.1:/tmp/guest-results.tar.gz "$results/"
+        timeout 30s ssh "${ssh_options[@]}" ci@127.0.0.1 sudo journalctl -b --no-pager > "$results/guest-journal.txt" 2>&1
+        timeout 90s ssh "${ssh_options[@]}" ci@127.0.0.1 'sudo tar -czf /tmp/guest-results.tar.gz /var/tmp/archzfs-results /var/tmp/test_results* 2>/dev/null; sudo chmod a+r /tmp/guest-results.tar.gz'
+        timeout 90s scp "${scp_options[@]}" ci@127.0.0.1:/tmp/guest-results.tar.gz "$results/"
     fi
     stop_vm
     exit "$status"
@@ -62,7 +64,9 @@ gpgv --homedir "$work/gnupg" --keyring "$work/arch-boxes.gpg" \
     2>&1 | tee "$results/image-signature.txt"
 qemu-img create -f qcow2 -F qcow2 -b "$work/base.qcow2" "$work/os.qcow2" 40G
 for i in 1 2 3; do
-    qemu-img create -f qcow2 "$work/scratch-$i.qcow2" 12G
+    size=12G
+    [[ $i != 1 ]] || size=64G
+    qemu-img create -f qcow2 "$work/scratch-$i.qcow2" "$size"
 done
 cat > "$work/user-data" <<EOF
 #cloud-config
@@ -91,7 +95,7 @@ start_vm() {
     sudo setfacl -m "u:$(id -un):rw" /dev/kvm
     getfacl /dev/kvm > "$results/kvm-$1-after.acl"
     test -r /dev/kvm && test -w /dev/kvm
-    qemu-system-x86_64 -machine q35,accel=kvm -cpu host -m 4096 -smp 2 \
+    qemu-system-x86_64 -machine q35,accel=kvm -cpu host -m 8192 -smp 2 \
         -display none -monitor none -serial "file:$results/serial-$1.log" \
         -drive "file=$work/os.qcow2,if=none,id=os,format=qcow2" \
         -device virtio-blk-pci,drive=os,serial=archzfs-os \
@@ -125,6 +129,7 @@ guest sudo cloud-init status --wait
 guest sudo install -d -o ci -g ci /var/tmp/archzfs-ci
 scp "${scp_options[@]}" -r runtime-candidate ci@127.0.0.1:/var/tmp/archzfs-ci/
 scp "${scp_options[@]}" ci/runtime/guest-*.sh ci@127.0.0.1:/var/tmp/archzfs-ci/
+scp "${scp_options[@]}" ci/runtime/select-runfile.py ci@127.0.0.1:/var/tmp/archzfs-ci/
 guest "sudo bash /var/tmp/archzfs-ci/guest-prepare.sh '$KERNEL_PACKAGE' '$MIRROR_URL'"
 scp "${scp_options[@]}" ci@127.0.0.1:/tmp/archzfs-vmlinuz "$work/vmlinuz"
 scp "${scp_options[@]}" ci@127.0.0.1:/tmp/archzfs-initramfs.img "$work/initramfs.img"
@@ -145,6 +150,7 @@ boot_args=(-kernel "$work/vmlinuz" -initrd "$work/initramfs.img"
     # interface naming; preserve that when bypassing its bootloader.
     -append "root=UUID=$root_uuid rw console=ttyS0 net.ifnames=0")
 start_vm candidate
-guest "sudo bash /var/tmp/archzfs-ci/guest-test.sh '${RUN_ZTS:-false}' '${ZTS_DIAGNOSE:-false}'"
+timeout --signal=INT --kill-after=30s 270m ssh "${ssh_options[@]}" ci@127.0.0.1 \
+    "sudo bash /var/tmp/archzfs-ci/guest-test.sh '${RUN_ZTS:-false}' '${ZTS_DIAGNOSE:-false}' '${ZTS_SCOPE:-full}' '${ZTS_SHARD:-all}'"
 printf 'PASS: %s package smoke tests; ZTS requested: %s\n' "$KERNEL_PACKAGE" "${RUN_ZTS:-false}" \
     | tee "$results/result.txt" >> "$GITHUB_STEP_SUMMARY"

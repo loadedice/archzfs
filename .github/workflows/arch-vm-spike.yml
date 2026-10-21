@@ -8,6 +8,15 @@ on:
       - 'ci/runtime/**'
   workflow_dispatch:
     inputs:
+      scope:
+        description: full suite, newly unresolved failures, or untested LTS tail
+        type: choice
+        default: full
+        options: [full, focus, tail]
+      shard:
+        description: all, or an upstream test-group fraction such as 1/4
+        type: string
+        default: all
       diagnose:
         description: Diagnose the nine unexpected failures with controlled reruns
         type: boolean
@@ -26,7 +35,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: ${{ inputs.diagnose && 'arch-vm-diagnose' || 'arch-vm-spike' }}-${{ github.ref }}
+  group: ${{ inputs.diagnose && 'arch-vm-diagnose' || 'arch-vm-spike' }}-${{ github.ref }}-${{ inputs.scope || 'full' }}-${{ inputs.shard || 'all' }}
   cancel-in-progress: true
 
 jobs:
@@ -43,6 +52,8 @@ jobs:
       MIRROR_URL: ${{ vars.MIRROR_URL }}
       RUN_ZTS: ${{ inputs.zts && 'true' || 'false' }}
       ZTS_DIAGNOSE: ${{ inputs.diagnose && 'true' || 'false' }}
+      ZTS_SCOPE: ${{ inputs.scope || 'full' }}
+      ZTS_SHARD: ${{ inputs.shard || 'all' }}
       # Reuse the completed builds while iterating on VM setup. Set to fresh
       # when packaging inputs change; the reuse script checks that boundary.
       CANDIDATE_RUN_ID: ${{ inputs.candidate_run || '39414535555' }}
@@ -109,7 +120,7 @@ jobs:
           name: arch-runtime-${{ matrix.kernel }}-${{ github.run_attempt }}
           path: |
             runtime-results/
-            runtime-candidate/
+            ${{ env.CANDIDATE_RUN_ID == 'fresh' && 'runtime-candidate/' || '' }}
           if-no-files-found: warn
           retention-days: 7
           compression-level: 0
