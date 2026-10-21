@@ -8,6 +8,11 @@ on:
       - 'ci/runtime/**'
   workflow_dispatch:
     inputs:
+      kernel:
+        description: Kernel coverage for this run
+        type: choice
+        default: both
+        options: [both, linux, linux-lts]
       scope:
         description: full suite, newly unresolved failures, or untested LTS tail
         type: choice
@@ -46,7 +51,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        kernel: [linux, linux-lts]
+        kernel: ${{ fromJSON(inputs.kernel == 'linux' && '["linux"]' || inputs.kernel == 'linux-lts' && '["linux-lts"]' || '["linux","linux-lts"]') }}
     env:
       KERNEL_PACKAGE: ${{ matrix.kernel }}
       MIRROR_URL: ${{ vars.MIRROR_URL }}
